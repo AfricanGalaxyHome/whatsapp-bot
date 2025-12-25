@@ -31,6 +31,17 @@ except Exception as e:
 # -----------------------------
 app = Flask(__name__)
 
+
+# -----------------------------
+# Auto-reply function
+# -----------------------------
+def send_whatsapp_reply(phone, text):
+    # For now, just print the reply
+    reply_text = f"Hi! You said: {text}"
+    print(f"Would send to {phone}: {reply_text}")
+
+    # Later, replace print with actual WhatsApp API call
+
 # -----------------------------
 # 5. Webhook route
 # -----------------------------
@@ -48,22 +59,23 @@ def webhook():
             return challenge, 200
         return "verification failed", 403
 
-    # 📩 Incoming WhatsApp messages (POST)
-    if request.method == "POST":
-        data = request.get_json()
-        print("Webhook Received:", data)
+   if request.method == "POST":
+    data = request.get_json()
+    print("Webhook Received:", data)
 
-        try:
-            entry = data["entry"][0]
-            changes = entry["changes"][0]
-            value = changes["value"]
-            messages = value.get("messages")
+    try:
+        # Safely access nested fields
+        entry = data.get("entry", [])[0]
+        changes = entry.get("changes", [])[0]
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
 
-            if messages:
-                msg = messages[0]
-                phone = msg["from"]
-                text = msg["text"]["body"]
+        if messages:
+            msg = messages[0]
+            phone = msg.get("from")
+            text = msg.get("text", {}).get("body")
 
+            if phone and text:
                 # Save to Firestore
                 db.collection("messages").add({
                     "phone": phone,
@@ -74,10 +86,14 @@ def webhook():
 
                 print(f"Saved message from {phone}: {text}")
 
-        except Exception as e:
-            print("Error processing message:", e)
+                # Auto-reply (step 3 we’ll add this function)
+                send_whatsapp_reply(phone, text)
 
-        return "ok", 200
+    except Exception as e:
+        print("Error processing message:", e)
+
+    return "ok", 200
+
 
 # -----------------------------
 # 6. Run app
