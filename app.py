@@ -1,22 +1,39 @@
-from flask import Flask, request
+# app.py
 import firebase_admin
 from firebase_admin import credentials, firestore
+from flask import Flask, request
 
-# -------------------------
-# Flask app
-# -------------------------
-app = Flask(__name__)
-
-# -------------------------
-# Firebase initialization
-# -------------------------
+# -----------------------------
+# 1. Initialize Firebase safely
+# -----------------------------
 cred = credentials.Certificate("firebase-key.json")
-firebase_admin.initialize_app(cred)
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred)
+
+# -----------------------------
+# 2. Connect to Firestore
+# -----------------------------
 db = firestore.client()
 
-# -------------------------
-# Webhook route
-# -------------------------
+# -----------------------------
+# 3. Test connection
+# -----------------------------
+try:
+    collections = db.collections()
+    print("Connected to Firebase! Collections in Firestore:")
+    for col in collections:
+        print("-", col.id)
+except Exception as e:
+    print("Error connecting to Firestore:", e)
+
+# -----------------------------
+# 4. Flask app
+# -----------------------------
+app = Flask(__name__)
+
+# -----------------------------
+# 5. Webhook route
+# -----------------------------
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
 
@@ -62,9 +79,8 @@ def webhook():
 
         return "ok", 200
 
-
-# -------------------------
-# Run app
-# -------------------------
+# -----------------------------
+# 6. Run app
+# -----------------------------
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
