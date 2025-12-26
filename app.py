@@ -31,19 +31,41 @@ except Exception as e:
 # -----------------------------
 app = Flask(__name__)
 
-
 # -----------------------------
-# Auto-reply function
+# 5. Auto-reply function
 # -----------------------------
 def send_whatsapp_reply(phone, text):
-    # For now, just print the reply
     reply_text = f"Hi! You said: {text}"
     print(f"Would send to {phone}: {reply_text}")
+    # Later: real WhatsApp API call goes here
+    
+    def get_conversation(phone):
+    """
+    Get conversation memory for a user
+    """
+    doc_ref = db.collection("conversations").document(phone)
+    doc = doc_ref.get()
 
-    # Later, replace print with actual WhatsApp API call
+    if doc.exists:
+        return doc.to_dict()
+    return None
+
+
+def save_conversation(phone, last_message, last_response, state="active"):
+    """
+    Save or update conversation memory
+    """
+    db.collection("conversations").document(phone).set({
+        "phone": phone,
+        "last_message": last_message,
+        "last_response": last_response,
+        "state": state,
+        "updated_at": firestore.SERVER_TIMESTAMP
+    }, merge=True)
+
 
 # -----------------------------
-# 5. Webhook route
+# 6. Webhook route
 # -----------------------------
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
@@ -59,44 +81,61 @@ def webhook():
             return challenge, 200
         return "verification failed", 403
 
-   if request.method == "POST":
-    data = request.get_json()
-    print("Webhook Received:", data)
+    # 📩 Incoming WhatsApp messages (POST)
+    if request.method == "POST":
+        data = request.get_json()
+        print("Webhook Received:", data)
 
-    try:
-        # Safely access nested fields
-        entry = data.get("entry", [])[0]
-        changes = entry.get("changes", [])[0]
-        value = changes.get("value", {})
-        messages = value.get("messages", [])
+        try:
+            entry = data.get("entry", [])[0]
+            changes = entry.get("changes", [])[0]
+            value = changes.get("value", {})
+            messages = value.get("messages", [])
 
-        if messages:
-            msg = messages[0]
-            phone = msg.get("from")
-            text = msg.get("text", {}).get("body")
+            if messages:
+                msg = messages[0]
+                phone = msg.get("from")
+                text = msg.get("text", {}).get("body")
 
-            if phone and text:
-                # Save to Firestore
-                db.collection("messages").add({
-                    "phone": phone,
-                    "message": text,
-                    "platform": "whatsapp",
-                    "timestamp": firestore.SERVER_TIMESTAMP
-                })
+                if phone and text:
+                # Save raw message
+                    db.collection("messages").add({
+                        "phone": phone,
+                        "message": text,
+                        "platform": "whatsapp",
+                        "timestamp": firestore.SERVER_TIMESTAMP
+                    })
 
-                print(f"Saved message from {phone}: {text}")
+                        # 🔍 Check conversation memory
+                        conversation = get_conversation(phone)
 
-                # Auto-reply (step 3 we’ll add this function)
-                send_whatsapp_reply(phone, text)
+                        if not conversation:
+                            # New user
+                            reply = "Hi 👋 Welcome to African Galaxy Home! How can I help you today?"
+                            state = "new"
+                        else:
+                            # Existing user
+                            reply = f"I hear you 👍 You said: {text}"
+                            state = "active"
 
-    except Exception as e:
-        print("Error processing message:", e)
+                        # Send reply
+                        send_whatsapp_reply(phone, reply)
 
-    return "ok", 200
+                        # Save conversation memory
+                        save_conversation(
+                            phone=phone,
+                            last_message=text,
+                            last_response=reply,
+                            state=state
+                        )
 
+        except Exception as e:
+            print("Error processing message:", e)
+
+        return "ok", 200
 
 # -----------------------------
-# 6. Run app
+# 7. Run app
 # -----------------------------
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
