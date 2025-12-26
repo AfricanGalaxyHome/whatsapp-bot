@@ -1,7 +1,11 @@
 # app.py
+import os
+from openai import OpenAI
 import firebase_admin
 from firebase_admin import credentials, firestore
 from flask import Flask, request
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # -----------------------------
 # 1. Initialize Firebase safely
@@ -49,6 +53,29 @@ def save_conversation(phone, last_message, last_response, state="active"):
         "updated_at": firestore.SERVER_TIMESTAMP
     }, merge=True)
 
+# -----------------------------
+# Fast& Safe Saved responses
+#------------------------------
+
+def detect_intent(text):
+    text = text.lower()
+
+    if any(word in text for word in ["hi", "hello", "hey"]):
+        return "greeting"
+
+    if any(word in text for word in ["price", "cost", "how much"]):
+        return "pricing"
+
+    if any(word in text for word in ["laptop", "pc", "computer"]):
+        return "products"
+
+    if any(word in text for word in ["location", "where", "address"]):
+        return "location"
+
+    if any(word in text for word in ["agent", "human", "call"]):
+        return "human"
+
+    return "unknown"
 
 # -----------------------------
 # Webhook route
@@ -99,8 +126,26 @@ def webhook():
                         reply = "Hi 👋 Welcome to African Galaxy Home! How can I help you today?"
                         state = "new"
                     else:
-                        reply = f"I hear you 👍 You said: {text}"
+                        intent = detect_intent(text)
                         state = "active"
+
+                        if intent == "greeting":
+                            reply = "Hi 👋 Welcome to African Galaxy Home! How can I help you today?"
+
+                        elif intent == "products":
+                            reply = "💻 We sell laptops, gaming accessories, and computer equipment. What are you looking for?"
+
+                        elif intent == "pricing":
+                            reply = "💰 Prices depend on the product. Please tell me which item you're interested in."
+
+                        elif intent == "location":
+                            reply = "📍 We operate online in South Africa. Delivery options are available."
+
+                        elif intent == "human":
+                            reply = "☎️ No problem! I’ll connect you to a human agent shortly."
+
+                        else:
+                            reply = "🤖 I didn’t fully understand that. Could you please explain a bit more?"
 
                     # Send reply
                     send_whatsapp_reply(phone, reply)
