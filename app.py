@@ -48,6 +48,7 @@ def send_whatsapp_reply(phone, text):
 
     if doc.exists:
         return doc.to_dict()
+
     return None
 
 
@@ -62,6 +63,7 @@ def save_conversation(phone, last_message, last_response, state="active"):
         "state": state,
         "updated_at": firestore.SERVER_TIMESTAMP
     }, merge=True)
+
 
 
 # -----------------------------
