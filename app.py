@@ -16,46 +16,31 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # -----------------------------
-# 3. Test connection
-# -----------------------------
-try:
-    collections = db.collections()
-    print("Connected to Firebase! Collections in Firestore:")
-    for col in collections:
-        print("-", col.id)
-except Exception as e:
-    print("Error connecting to Firestore:", e)
-
-# -----------------------------
-# 4. Flask app
+# 3. Flask app
 # -----------------------------
 app = Flask(__name__)
 
 # -----------------------------
-# 5. Auto-reply function
+# Auto-reply sender (stub)
 # -----------------------------
 def send_whatsapp_reply(phone, text):
-    reply_text = f"Hi! You said: {text}"
-    print(f"Would send to {phone}: {reply_text}")
-    # Later: real WhatsApp API call goes here
-    
-    def get_conversation(phone):
-    """
-    Get conversation memory for a user
-    """
+    print(f"Would send to {phone}: {text}")
+    # Later: replace with real WhatsApp API call
+
+
+# -----------------------------
+# Conversation memory helpers
+# -----------------------------
+def get_conversation(phone):
     doc_ref = db.collection("conversations").document(phone)
     doc = doc_ref.get()
 
     if doc.exists:
         return doc.to_dict()
-
     return None
 
 
 def save_conversation(phone, last_message, last_response, state="active"):
-    """
-    Save or update conversation memory
-    """
     db.collection("conversations").document(phone).set({
         "phone": phone,
         "last_message": last_message,
@@ -65,14 +50,13 @@ def save_conversation(phone, last_message, last_response, state="active"):
     }, merge=True)
 
 
-
 # -----------------------------
-# 6. Webhook route
+# Webhook route
 # -----------------------------
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
 
-    # 🔐 Meta verification (GET)
+    # 🔐 Meta verification
     if request.method == "GET":
         verify_token = "CALVIN_SECRET_TOKEN"
         mode = request.args.get("hub.mode")
@@ -83,7 +67,7 @@ def webhook():
             return challenge, 200
         return "verification failed", 403
 
-    # 📩 Incoming WhatsApp messages (POST)
+    # 📩 Incoming WhatsApp messages
     if request.method == "POST":
         data = request.get_json()
         print("Webhook Received:", data)
@@ -100,7 +84,7 @@ def webhook():
                 text = msg.get("text", {}).get("body")
 
                 if phone and text:
-                # Save raw message
+                    # Save raw message
                     db.collection("messages").add({
                         "phone": phone,
                         "message": text,
@@ -108,36 +92,35 @@ def webhook():
                         "timestamp": firestore.SERVER_TIMESTAMP
                     })
 
-                        # 🔍 Check conversation memory
-                        conversation = get_conversation(phone)
+                    # Conversation logic
+                    conversation = get_conversation(phone)
 
-                        if not conversation:
-                            # New user
-                            reply = "Hi 👋 Welcome to African Galaxy Home! How can I help you today?"
-                            state = "new"
-                        else:
-                            # Existing user
-                            reply = f"I hear you 👍 You said: {text}"
-                            state = "active"
+                    if not conversation:
+                        reply = "Hi 👋 Welcome to African Galaxy Home! How can I help you today?"
+                        state = "new"
+                    else:
+                        reply = f"I hear you 👍 You said: {text}"
+                        state = "active"
 
-                        # Send reply
-                        send_whatsapp_reply(phone, reply)
+                    # Send reply
+                    send_whatsapp_reply(phone, reply)
 
-                        # Save conversation memory
-                        save_conversation(
-                            phone=phone,
-                            last_message=text,
-                            last_response=reply,
-                            state=state
-                        )
+                    # Save conversation memory
+                    save_conversation(
+                        phone=phone,
+                        last_message=text,
+                        last_response=reply,
+                        state=state
+                    )
 
         except Exception as e:
             print("Error processing message:", e)
 
         return "ok", 200
 
+
 # -----------------------------
-# 7. Run app
+# Run app
 # -----------------------------
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
