@@ -76,6 +76,38 @@ def detect_intent(text):
         return "human"
 
     return "unknown"
+    
+    
+def ai_reply(user_message, conversation=None):
+    system_prompt = """
+You are a helpful WhatsApp assistant for African Galaxy Home.
+The business sells computer accessories, electronics, gaming equipment,
+and operates online in South Africa.
+
+Rules:
+- Be friendly and professional
+- Keep replies short (WhatsApp style)
+- Ask clarifying questions when needed
+- Do NOT invent prices
+"""
+
+    messages = [{"role": "system", "content": system_prompt}]
+
+    if conversation:
+        messages.append({
+            "role": "assistant",
+            "content": conversation.get("last_response", "")
+        })
+
+    messages.append({"role": "user", "content": user_message})
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+        max_tokens=120
+    )
+
+    return response.choices[0].message.content.strip()
 
 # -----------------------------
 # Webhook route
@@ -126,26 +158,8 @@ def webhook():
                         reply = "Hi 👋 Welcome to African Galaxy Home! How can I help you today?"
                         state = "new"
                     else:
-                        intent = detect_intent(text)
+                        reply = ai_reply(text, conversation)
                         state = "active"
-
-                        if intent == "greeting":
-                            reply = "Hi 👋 Welcome to African Galaxy Home! How can I help you today?"
-
-                        elif intent == "products":
-                            reply = "💻 We sell laptops, gaming accessories, and computer equipment. What are you looking for?"
-
-                        elif intent == "pricing":
-                            reply = "💰 Prices depend on the product. Please tell me which item you're interested in."
-
-                        elif intent == "location":
-                            reply = "📍 We operate online in South Africa. Delivery options are available."
-
-                        elif intent == "human":
-                            reply = "☎️ No problem! I’ll connect you to a human agent shortly."
-
-                        else:
-                            reply = "🤖 I didn’t fully understand that. Could you please explain a bit more?"
 
                     # Send reply
                     send_whatsapp_reply(phone, reply)
